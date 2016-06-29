@@ -28,10 +28,13 @@ void cirMgr::print_node(Node v){
 		cout<<"PI";
 	else if(v.type==1)
 		cout<<"PO";
+	else if(v.type==4)
+		cout<<"NOT";
 	else 
 		cout<<"UNKNOWN";
 	
 	cout<<"["<<v.num<<"]="<<v.value<<" @"<<v.arrival_time<<", ";
+	cout<<"imply by:"<<v.imply_level<<", ";//v2
 	cout<<"fanin:";
 	size=v.fanin.size();
 	for(i=0;i<size;i++)
@@ -94,7 +97,7 @@ void cirMgr::simulation(){
 
 bool cirMgr::path_is_true(Path p){//不傳進來能用指標只到整張圖?
 	int i,size=p.gates.size();
-	bool true_flag=(p.gates[0]->arrival_time==0&&p.gates[size-1]->arrival_time==size-1);
+	bool true_flag=(p.gates[0]->arrival_time==0&&p.gates[size-1]->arrival_time==size-2);
 	
 	for(i=1;i<size-1;i++){
 		if(p.gates[i]->arrival_time==i){

@@ -31,6 +31,9 @@ void path_assign(Path p){//need to clear imply_level of all gates
 	t.resize(size,0);
 	
 	for(i=size-1;i>0;i--){
+		if(p.gates[i]->value!=2){
+			continue;
+		}
 		if(t[i]>=allowed_ti(p.gates[i])){//NAND NOR gate only 3 input allowed,PO only 2 allowed
 			t[i]=0;
 			i+=2;
@@ -129,18 +132,25 @@ void clear_value(Node* v,int level){
 	int i,size;
 	q.push(v);
 	while(q.size()!=0){
+		cout<<q.size();
 		Node* temp=q.front();
+		print_node(*temp);
 		q.pop();
 		if(temp->imply_level==level){
 			temp->imply_level=0;
 			temp->value=2;
-			q.push(temp->fanin[0]);
-			q.push(temp->fanin[1]);
+			//v2
+			if(temp->type!=0&&temp->fanin[0]->imply_level==level)
+				q.push(temp->fanin[0]);
+			if(temp->type!=0&&temp->type!=4&&temp->type!=1&&temp->fanin[1]->imply_level==level)
+				q.push(temp->fanin[1]);
 			size=temp->fanout.size();
 			for(i=0;i<size;i++){
-				q.push(temp->fanout[i]);
+				if(temp->fanout[i]->imply_level==level)
+					q.push(temp->fanout[i]);
 			}
 		}
+		print_node(*temp);
 	}
 }
 int allowed_ti(Node* v){
