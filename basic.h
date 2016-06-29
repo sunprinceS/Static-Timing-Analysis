@@ -17,11 +17,11 @@ enum GateType {
 
 typedef struct GATE{
 	vector<GATE *> fanin,fanout;
-	size_t num;
+	int num;
 	GateType type;//0:PI, 1:PO, 2:NAND, 3:NOR
-	size_t value;//0,1,x->0,1,2
-	size_t arrival_time;
-	size_t imply_level;
+	int value;//0,1,x->0,1,2
+	int arrival_time;
+	int imply_level;
 } Node;
 
 typedef struct PATH{

@@ -12,7 +12,7 @@ EXEC = sta
 all: $(EXEC)
 	@echo "Finish!"
 
-sta: main.o util.o
+sta: main.o cirMgr.o
 	@echo "> Building $@"
 	@$(CXX) $(CFLAGS) $^ -o $@
 

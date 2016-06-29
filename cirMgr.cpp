@@ -1,24 +1,24 @@
-#include "util.h"
-void print_map(vector<Node> PI,vector<Node> Gate,vector<Node> PO){
+#include "cirMgr.h"
+void cirMgr::print_map(){
 	int i,size;
 	cout<<"PIs:\n";
-	size=PI.size();
+	size=this->PI.size();
 	for(i=0;i<size;i++)
-		print_node(PI[i]);
+		print_node(this->PI[i]);
 
 	cout<<"Gates:\n";
-	size=Gate.size();
+	size=this->Gate.size();
 	for(i=0;i<size;i++)
-		print_node(Gate[i]);
+		print_node(this->Gate[i]);
 	
 	cout<<"POs:\n";
-	size=PO.size();
+	size=this->PO.size();
 	for(i=0;i<size;i++)
-		print_node(PO[i]);
+		print_node(this->PO[i]);
 	
 }
 
-void print_node(Node v){
+void cirMgr::print_node(Node v){
 	int i,size;
 	if(v.type==2)
 		cout<<"NAND";
@@ -45,11 +45,10 @@ void print_node(Node v){
 	cout<<endl;
 }
 
-
-void simulation(vector<Node> PI){
+void cirMgr::simulation(){
 	queue<Node*> q;
 	Node* now;
-	int i,size=PI.size();
+	int i,size=this->PI.size();
 	for(i=0;i<size;i++)
 		q.push(&PI[i]);
 		
@@ -61,7 +60,7 @@ void simulation(vector<Node> PI){
 			Node* son=now->fanout[i];
 			if(son->type==1){
 				son->value=now->value;
-				son->arrival_time=now->arrival_time+1;
+				son->arrival_time=now->arrival_time;
 				continue;
 			}
 			else if(now->value==0&&son->type==2&&son->value==2){//NAND gate got 1st input 0
@@ -84,11 +83,16 @@ void simulation(vector<Node> PI){
 				son->arrival_time=now->arrival_time+1;
 				q.push(son);
 			}
+			else if(son->type == 4){
+				son->value = 1 - now->value;
+				son->arrival_time=now->arrival_time+1;
+				q.push(son);
+			}
 		}
 	}
 }
 
-bool path_is_true(Path p){//不傳進來能用指標只到整張圖?
+bool cirMgr::path_is_true(Path p){//不傳進來能用指標只到整張圖?
 	int i,size=p.gates.size();
 	bool true_flag=(p.gates[0]->arrival_time==0&&p.gates[size-1]->arrival_time==size-1);
 	
@@ -109,4 +113,37 @@ bool path_is_true(Path p){//不傳進來能用指標只到整張圖?
 		}
 	}
 	return true_flag;
+}
+
+bool cirMgr::read_circuit(const string& fileName){
+	vector<string> input;
+	ifstream fin(fileName.c_str(),ios::in);
+	string str;
+	while(getline(fin,str)){
+		input.push_back(str);
+	}
+	fin.close();
+	handleInput();
+	return true;
+}
+
+bool cirMgr::handleInput(){
+	vector<GATE *> null;
+	Node PI_template  ={null,null,0,_PI,0,0,0};
+	Node PO_template  ={null,null,0,_PO,2,2147483647,0};
+	Node Gate_template={null,null,0,_NAND,2,65538,0};
+	this->PI.resize(2,PI_template);
+	this->PI[1].num=1;
+	this->PO.resize(1,PO_template);
+	this->PO[0].num=3;
+	this->Gate.resize(1,Gate_template);
+	this->Gate[0].num=2;
+	
+	this->PI[0].fanout.push_back(&Gate[0]);
+	this->PI[1].fanout.push_back(&Gate[0]);
+	this->PO[0].fanin.push_back(&Gate[0]);
+	this->Gate[0].fanout.push_back(&PO[0]);
+	this->Gate[0].fanin.push_back(&PI[0]);
+	this->Gate[0].fanin.push_back(&PI[1]);
+	return true;
 }
