@@ -1,5 +1,8 @@
 #include "atpg.h"
-bool need_to_change_input(Node* v,int level){//level=p["i"] in path, v belongs path, so we check need_to_change_input only when we already assign inputs,and output of it ;
+bool need_to_change_input(Node* v,int level){//v belongs path, so we check need_to_change_input only when we already assign inputs,and output of it ;
+//延續 path_assign，v是我們剛assign其input的gate，要check need to change or not 等同於看是否有conflict。所以我們進行implication，同時只要有衝突implication必定會改動到global variable conflict_flag
+//因為input是剛assign的，所以我們把input wire接到的所有其他gate(gate input/output=此wire的gate)都加入imply序列。
+//若所有能考慮的都考慮完且沒conflict，代表不用換input assignment，否則只要一conflict，就需要換input assignment
 	queue<Node*> q;
 	int i,size,l=level,f0size=v->fanin[0]->fanout.size(),f1size;
 	q.push(v->fanin[0]);
@@ -35,7 +38,18 @@ bool need_to_change_input(Node* v,int level){//level=p["i"] in path, v belongs p
 	return 0;
 }
 
-bool path_assign(Path p,vector<Node> PI){//need to clear imply_level of all gates
+bool path_assign(Path p,vector<Node> PI){
+//此韓式使用前最好重製所有PI,PO,gates之imply_level為0。
+//t是拿來記錄path上第i個gate已經測試過幾種input可能(由allowed_ti()算最多t[i]能多大，像是NAND Gate output=0，目標是input a控制(a接角在目標path上)，那t[i]=2(a=0,b=0/1)兩種可能)
+//所以邏輯就是從PO開始往前，一個gate(從PI=0數過來是第i個gate的話)若我們知道其output值，卻不知道其input值，那我們就猜它的兩個接角之input(由 assign_input() 決定assign方式)
+//這兩個input接角的值是在我們考慮gate[i]的input時賦予的，所以他們(gate[i]->fanin[0/1]兩個gate)的imply_level=i
+//然後我們把這個in/output都已知的gate丟到 need_to_change_input()來確認目前gate[i] input在這種assign下是否會引發邏輯上的錯誤(conflict)，若無，我們可以繼續看gate[i-1]，直到看到PI
+//但是若有錯誤，我們要重新assign，而此時若t[i]>=allowed_ti()回傳的最多嘗試次數，那麼顯然是之前(更靠近PO)的gate 之input assign讓現在gate[i]在假設assignment時無論如猴都會衝突
+//所以我們要改的會是前一個進行假設的gate(不一定是gate[i+1]，例如gate[i-1]是NOT Gate，你假設完gate[i-1]的值時同時imply了gate[i-2]的值，所以沿著目標path網PI走時，gate[i-1]我們會忽略
+//，可以直接考慮gate[i-2]的input assign，此時若發現gate[i-2]的assign一定造成衝突，那就要回溯到gate[i]而不是gate[i-1])
+//我們就在input assign與conflict所以回溯這兩個動作下，看看最後是不是能assign到PI，還是會發現PO不論是0或是1都會有conflict
+//若推到PI，還是要simulation已知PI input assign(有些PI可能是未知，但simulation()還是能算出所有能得到的值)，看看目標path是否真的會是true path，若否，一樣要回溯，check是true path就回傳1代表找到了
+//另一種情況是PO=0或1，仍總是有conflict，那此path就是false path 了。
 	int i,size=p.gates.size();
 	vector<int> t;
 	t.resize(size,0);
@@ -78,8 +92,8 @@ bool path_assign(Path p,vector<Node> PI){//need to clear imply_level of all gate
 			cout<<"No need to change\n";
 		
 		if(i==1){
-			simulation(PI);//simulation發現爛掉，回朔前一次assignment分岐
-			if(path_is_true(p)==0){
+			simulation(PI);
+			if(path_is_true(p)==0){//simulation發現爛掉，回朔前一次assignment分岐
 				int j;
 				for(j=0;i+j<size-1;j++){
 					if(p.gates[i+j]->imply_level!=p.gates[i+j+1]->imply_level){
@@ -92,8 +106,10 @@ bool path_assign(Path p,vector<Node> PI){//need to clear imply_level of all gate
 	}
 	return 1;
 }
-
 void assign_input(Node* v,int prefer,int times,int level){
+//times是說你第幾次近來，以免每次進來都猜一樣，並沒換assign pattern
+//level是把assign的wire(output gate)標上記號，若path_assign在gate[i]的各種assign都不行要回溯時，就能用 clear_value()把imply_level=i的gate之output value設回x
+//prefer是說哪個input在目標path上，input允許的話第一次assign時會把此input設成controlling value, another input設non controlling.
 	if(v->type==1){
 		v->fanin[0]->value=times;
 		v->fanin[0]->imply_level=level;
@@ -222,14 +238,15 @@ void clear_value(Node* v,int level){//done
 	}
 }
 
-int allowed_ti(Node* v, bool inpath){//v can only be on the target path//might cause problem
+int allowed_ti(Node* v, bool inpath){
+//inpath是說是否在target path上，但目前似乎呼叫此函數時一定在path上，可能是多餘的
 	if(v->type==1)
 		return 2;
 	if(v->type==4)//v3
 		return 1;
-	if(v->type==2&&v->value==0)
+	if(v->type==2&&v->value==0)//1NAND1=0 
 		return 1;
-	if(v->type==2&&v->value==1)
+	if(v->type==2&&v->value==1)//inpath代表有prefer，假設prefer a rather than b，aNANDb就不會給1NAND0，因為此時a就不會造成truepath了。所以只剩0NAND0,0NAND1可以造出output1，即t最多2次，沒prefer的話1NAND0可接受，所以多1
 		return 2+(1-inpath);
 	if(v->type==3&&v->value==1)
 		return 1;
@@ -240,16 +257,23 @@ int allowed_ti(Node* v, bool inpath){//v can only be on the target path//might c
 }
 
 vector<Node*> implication(Node* v,int level){
+//給你一個gate，你判斷有沒有更多x(.value=2)者能得出值
+//當我們得到一個wire的值時，用到此wire的gate都要去檢查有沒有更多x的wire便已知，即看看有沒有implication
+//要檢查的gate會回傳回 need_to_change_input
 	vector<Node*> totest;
-	//PI/PO dont need to implication
+	//PI/PO dont need implication
 	cout<<"implying node with level="<<level<<":\n";
 	print_node(*v);
 	
 	if(v->type==0||v->type==1){
+		if(v->type==1){
+			v->value=v->fanin[0]->value;
+			v->imply_level=v->fanin[0]->imply_level;
+		}
 		cout<<"No imply for PI/PO\n";
 		return totest;
 	}
-		//check conflict
+	//check conflict 是檢查是否有邏輯錯誤，即in/output value不符合gate功能
 	if(v->type==2){
 		if((v->fanin[1]->value==0||v->fanin[0]->value==0)&&v->value==0){
 			conflict_flag=1;
@@ -280,7 +304,7 @@ vector<Node*> implication(Node* v,int level){
 	int i,size;
 	if(v->type==2){//NAND
 		if(v->value==2){
-			if(v->fanin[0]->value==0&&v->fanin[1]->value!=0){
+			if(v->fanin[0]->value==0&&v->fanin[1]->value!=0){//aNANDb=y,y=x,a=0,b=0  => y=1
 				v->value=1;
 				v->imply_level=level;
 				//v->arrival_time=v->fanin[0]->arrival_time;

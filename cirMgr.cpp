@@ -95,7 +95,8 @@ void cirMgr::simulation(){
 	}
 }
 
-bool cirMgr::path_is_true(Path p){//不傳進來能用指標只到整張圖?
+bool cirMgr::path_is_true(Path p){
+//一路上所有gate都確認是true path，考慮到達時間以及邏輯上的關係
 	int i,size=p.gates.size();
 	bool true_flag=(p.gates[0]->arrival_time==0&&p.gates[size-1]->arrival_time==size-2);
 	
@@ -107,6 +108,16 @@ bool cirMgr::path_is_true(Path p){//不傳進來能用指標只到整張圖?
 			}
 			else if(p.gates[i-1]->value==0&&p.gates[i]->value==0&&p.gates[i]->type==3){//input is not the NOR gate controlling value 
 				true_flag=0;
+				break;
+			}
+			else if(((p.gates[i-1]==p.gates[i]->fanin[0]&&p.gates[i]->fanin[1]->arrival_time<p.gates[i]->fanin[0]->arrival_time)||(p.gates[i-1]==p.gates[i]->fanin[1]&&p.gates[i]->fanin[1]->arrival_time>p.gates[i]->fanin[0]->arrival_time))
+					&&p.gates[i]->fanin[0]->value==p.gates[i]->fanin[1]->value&&((p.gates[i]->fanin[0]->value==0&&p.gates[i]->type==2)||(p.gates[i]->fanin[0]->value==1&&p.gates[i]->type==3))){
+				true_flag=0;
+				break;
+			}
+			else if(((p.gates[i-1]==p.gates[i]->fanin[0]&&p.gates[i]->fanin[1]->arrival_time>p.gates[i]->fanin[0]->arrival_time)||(p.gates[i-1]==p.gates[i]->fanin[1]&&p.gates[i]->fanin[1]->arrival_time<p.gates[i]->fanin[0]->arrival_time))
+					&&p.gates[i]->fanin[0]->value==p.gates[i]->fanin[1]->value&&((p.gates[i]->fanin[0]->value==1&&p.gates[i]->type==2)||(p.gates[i]->fanin[0]->value==0&&p.gates[i]->type==3))){
+						true_flag=0;
 				break;
 			}
 		}
